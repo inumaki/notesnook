@@ -35,6 +35,7 @@ import { FILE_SIZE_LIMIT, IMAGE_SIZE_LIMIT } from "../../../utils/constants";
 import { eCloseSheet } from "../../../utils/events";
 import { editorController, editorState } from "./utils";
 import { useSettingStore } from "../../../stores/use-setting-store";
+import filesystem from "../../../common/filesystem";
 
 const showEncryptionSheet = (file) => {
   presentSheet({
@@ -230,6 +231,16 @@ const handleImageResponse = async (response, options) => {
   });
 
   let fileName = image.originalFileName || image.fileName;
+
+  editorController.current?.commands.insertImage({
+    hash: hash,
+    mime: image.type,
+    title: fileName,
+    dataurl: b64,
+    size: image.fileSize,
+    filename: fileName
+  });
+
   if (!(await attachFile(uri, hash, image.type, fileName, options))) return;
   const isPng = /(png)/g.test(image.type);
   const isJpeg = /(jpeg|jpg)/g.test(image.type);
@@ -243,15 +254,6 @@ const handleImageResponse = async (response, options) => {
   }
 
   if (Platform.OS === "ios") await RNFetchBlob.fs.unlink(uri);
-
-  editorController.current?.commands.insertImage({
-    hash: hash,
-    mime: image.type,
-    title: fileName,
-    dataurl: b64,
-    size: image.fileSize,
-    filename: fileName
-  });
 };
 
 export async function attachFile(uri, hash, type, filename, options) {
@@ -267,6 +269,10 @@ export async function attachFile(uri, hash, type, filename, options) {
         context: "local"
       });
       return false;
+    }
+
+    if (!options.reupload && exists) {
+      options.reupload = (await filesystem.getUploadedFileSize(hash)) <= 0;
     }
 
     if (!exists || options?.reupload) {

@@ -23,7 +23,6 @@ import { db } from "../../common/db";
 import { showBuyDialog } from "../../common/dialog-controller";
 import { TaskManager } from "../../common/task-manager";
 import { isUserPremium } from "../../hooks/use-is-user-premium";
-import fs from "../../interfaces/fs";
 import { showToast } from "../../utils/toast";
 import { showFilePicker } from "../../utils/file-picker";
 
@@ -138,6 +137,7 @@ export type Attachment = {
   mime: string;
   size: number;
   dataurl?: string;
+  bloburl?: string;
 };
 
 type AddAttachmentOptions = {
@@ -151,25 +151,29 @@ async function addAttachment(
   dataurl: string | undefined,
   options: AddAttachmentOptions = {}
 ): Promise<Attachment> {
-  const { expectedFileHash, forceWrite, showProgress = true } = options;
+  const { default: FS } = await import("../../interfaces/fs");
+  const { expectedFileHash, showProgress = true } = options;
+  let forceWrite = options.forceWrite;
 
   const action = async () => {
-    const reader: ReadableStreamReader<Uint8Array> = (
-      file.stream() as unknown as ReadableStream<Uint8Array>
-    ).getReader();
-
-    const { hash, type: hashType } = await fs.hashStream(reader);
+    const reader = file.stream().getReader();
+    const { hash, type: hashType } = await FS.hashStream(reader);
     reader.releaseLock();
 
     if (expectedFileHash && hash !== expectedFileHash)
       throw new Error(
         `Please select the same file for reuploading. Expected hash ${expectedFileHash} but got ${hash}.`
       );
+
     const exists = db.attachments?.exists(hash);
+    if (!forceWrite && exists) {
+      forceWrite = (await FS.getUploadedFileSize(hash)) <= 0;
+    }
+
     if (forceWrite || !exists) {
       const key: SerializedKey = await getEncryptionKey();
 
-      const output = await fs.writeEncryptedFile(file, key, hash);
+      const output = await FS.writeEncryptedFile(file, key, hash);
       if (!output) throw new Error("Could not encrypt file.");
 
       if (forceWrite && exists) await db.attachments?.reset(hash);

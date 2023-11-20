@@ -23,7 +23,9 @@ import { desktop } from "../common/desktop-bridge";
 import createStore from "../common/store";
 import Config from "../utils/config";
 import BaseStore from "./index";
+import { store as editorStore } from "./editor-store";
 import { isTelemetryEnabled, setTelemetry } from "../utils/telemetry";
+import { setDocumentTitle } from "../utils/dom";
 
 /**
  * @extends {BaseStore<SettingStore>}
@@ -40,6 +42,7 @@ class SettingStore extends BaseStore {
 
   zoomFactor = 1.0;
   privacyMode = false;
+  hideNoteTitle = Config.get("hideNoteTitle", false);
   telemetry = isTelemetryEnabled();
   /** @type {string} */
   dateFormat = null;
@@ -54,6 +57,7 @@ class SettingStore extends BaseStore {
    */
   desktopIntegrationSettings = undefined;
   autoUpdates = true;
+  isFlatpak = false;
 
   refresh = async () => {
     this.set({
@@ -61,6 +65,7 @@ class SettingStore extends BaseStore {
       timeFormat: db.settings.getTimeFormat(),
       titleFormat: db.settings.getTitleFormat(),
       trashCleanupInterval: db.settings.getTrashCleanupInterval(),
+      isFlatpak: await desktop?.integration.isFlatpak.query(),
       desktopIntegrationSettings:
         await desktop?.integration.desktopIntegration.query(),
       privacyMode: await desktop?.integration.privacyMode.query(),
@@ -161,6 +166,15 @@ class SettingStore extends BaseStore {
     const privacyMode = this.get().privacyMode;
     this.set({ privacyMode: !privacyMode });
     await desktop?.integration.setPrivacyMode.mutate({ enabled: !privacyMode });
+  };
+
+  toggleHideTitle = async () => {
+    const { hideNoteTitle } = this.get();
+    this.set({ hideNoteTitle: !hideNoteTitle });
+    Config.set("hideNoteTitle", !hideNoteTitle);
+    setDocumentTitle(
+      !hideNoteTitle ? undefined : editorStore.get().session.title
+    );
   };
 
   toggleAutoUpdates = async () => {

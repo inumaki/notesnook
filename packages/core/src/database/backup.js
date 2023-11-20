@@ -23,6 +23,7 @@ import Migrator from "./migrator.js";
 import { toChunks } from "../utils/array.js";
 import { migrateItem } from "../migrations.js";
 import Indexer from "./indexer.js";
+import setManipulator from "../utils/set.js";
 
 const COLORS = [
   "red",
@@ -247,9 +248,10 @@ export default class Backup {
     const { data, version = 0 } = backup;
 
     const toAdd = {};
-    for (const item of Array.isArray(data) ? data : Object.values(data)) {
+    for (let item of Array.isArray(data) ? data : Object.values(data)) {
       // we do not want to restore deleted items
-      if (!item || (!item.type && item.deleted)) continue;
+      if (!item || (!item.type && item.deleted) || typeof item !== "object")
+        continue;
       // in v5.6 of the database, we did not set note history session's type
       if (!item.type && item.sessionContentId) item.type = "notehistory";
 
@@ -264,6 +266,23 @@ export default class Backup {
         item.type === "tag" && COLORS.includes(item.title.toLowerCase())
           ? "color"
           : item.itemType || item.type;
+
+      // items should sync immediately after getting restored
+      item.dateModified = Date.now();
+      item.synced = false;
+
+      if (itemType === "attachment" && item.metadata && item.metadata.hash) {
+        const attachment = this._db.attachments.attachment(item.metadata.hash);
+        if (attachment) {
+          item = {
+            ...attachment,
+            noteIds: setManipulator.union(attachment.noteIds, item.noteIds)
+          };
+        } else {
+          item.dateUploaded = undefined;
+          item.failed = undefined;
+        }
+      }
 
       const collectionKey = itemTypeToCollectionKey[itemType];
       if (collectionKey) {

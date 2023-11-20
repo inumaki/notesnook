@@ -17,11 +17,10 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { INNCrypto } from "@notesnook/crypto";
-import CryptoWorker from "./nncrypto.worker?worker";
-import { wrap } from "comlink";
-
-export const NNCrypto =
-  IS_DESKTOP_APP && window.NativeNNCrypto
-    ? new window.NativeNNCrypto()
-    : (wrap<INNCrypto>(new CryptoWorker()) as INNCrypto);
+export async function lazify<T, R>(
+  loader: Promise<T>,
+  action: (module: T) => R | Promise<R>
+): Promise<R> {
+  const module = await loader;
+  return await action(module);
+}

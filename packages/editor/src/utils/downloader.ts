@@ -17,6 +17,8 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import DataURL from "@notesnook/core/dist/utils/dataurl";
+
 export type DownloadOptions = {
   corsHost: string;
 };
@@ -58,10 +60,18 @@ const UTITypes: Record<string, string> = {
   "public.heifs": "image/heif-sequence"
 };
 
+export function corsify(url: string, host?: string) {
+  if (host && url && !url.startsWith("blob:") && !isDataUrl(url))
+    return `${host}/${url}`;
+  return url;
+}
+
 export async function downloadImage(url: string, options?: DownloadOptions) {
-  if (options?.corsHost && !url.startsWith("blob:"))
-    url = `${options.corsHost}/${url}`;
-  const response = await fetch(url);
+  const response = await fetch(corsify(url, options?.corsHost), {
+    mode: "cors",
+    credentials: "omit",
+    cache: "force-cache"
+  });
   if (!response.ok) throw new Error(`invalid status code ${response.status}`);
 
   let contentType = response.headers.get("Content-Type");
@@ -87,7 +97,7 @@ export async function downloadImage(url: string, options?: DownloadOptions) {
   return {
     blob,
     url: URL.createObjectURL(blob),
-    type: contentType,
+    mimeType: contentType,
     size
   };
 }
@@ -106,10 +116,17 @@ export function isDataUrl(url?: string): boolean {
   return url?.startsWith("data:") || false;
 }
 
-export async function toBlobURL(dataurl: string) {
-  if (!isDataUrl(dataurl)) return dataurl;
+const OBJECT_URL_CACHE: Record<string, string | undefined> = {};
+export function toBlobURL(dataurl: string, id?: string) {
+  if (id && OBJECT_URL_CACHE[id]) return OBJECT_URL_CACHE[id];
+  if (!isDataUrl(dataurl)) return;
 
-  const response = await fetch(dataurl);
-  const blob = await response.blob();
-  return URL.createObjectURL(blob);
+  const { data, mime } = DataURL.toObject(dataurl); //.split(",");
+  if (!data || !mime) return;
+  const objectURL = URL.createObjectURL(
+    new Blob([Buffer.from(data, "base64")], { type: mime })
+  );
+
+  if (id) OBJECT_URL_CACHE[id] = objectURL;
+  return objectURL;
 }

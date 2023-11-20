@@ -26,6 +26,7 @@ import IconTag from "../icon-tag";
 import { db } from "../../common/db";
 import { useMenuTrigger } from "../../hooks/use-menu";
 import { MenuItem } from "@notesnook/ui";
+import { navigate } from "../../navigation";
 
 type HeaderProps = { readonly: boolean };
 function Header(props: HeaderProps) {
@@ -39,7 +40,7 @@ function Header(props: HeaderProps) {
 
   return (
     <>
-      {!readonly && id && (
+      {id && (
         <Flex
           sx={{ lineHeight: 2.5, alignItems: "center", flexWrap: "wrap" }}
           data-test-id="tags"
@@ -50,24 +51,34 @@ function Header(props: HeaderProps) {
               key={tag}
               text={db.tags?.alias(tag)}
               icon={Tag}
-              title={`Click to remove`}
-              onClick={() => setTag(tag)}
+              title={tag}
+              onClick={() => {
+                const tagItem = db.tags?.tag(tag);
+                if (!tagItem) {
+                  setTag(tag);
+                  return;
+                }
+                navigate(`/tags/${tagItem.id}`);
+              }}
+              onDismiss={readonly ? undefined : () => setTag(tag)}
               styles={{ container: { mr: 1 }, text: { fontSize: "body" } }}
             />
           ))}
-          <Autosuggest
-            sessionId={id}
-            filter={(query) =>
-              db.lookup?.tags(filterableTags, query).slice(0, 10) || []
-            }
-            onAdd={(value) => setTag(value)}
-            onSelect={(item) => setTag(item.title)}
-            onRemove={() => {
-              if (tags.length <= 0) return;
-              setTag(tags[tags.length - 1]);
-            }}
-            defaultItems={filterableTags?.slice(0, 10) || []}
-          />
+          {!readonly && (
+            <Autosuggest
+              sessionId={id}
+              filter={(query) =>
+                db.lookup?.tags(filterableTags, query).slice(0, 10) || []
+              }
+              onAdd={(value) => setTag(value)}
+              onSelect={(item) => setTag(item.title)}
+              onRemove={() => {
+                if (tags.length <= 0) return;
+                setTag(tags[tags.length - 1]);
+              }}
+              defaultItems={filterableTags?.slice(0, 10) || []}
+            />
+          )}
         </Flex>
       )}
     </>
@@ -86,6 +97,7 @@ type AutosuggestProps = {
 export function Autosuggest(props: AutosuggestProps) {
   const { sessionId, filter, onRemove, onSelect, onAdd, defaultItems } = props;
   const inputRef = useRef<HTMLInputElement>(null);
+  const arrowDown = useRef<boolean>();
   const filteredItems = useRef<any[]>([]);
   const { openMenu, closeMenu, isOpen } = useMenuTrigger();
   const clearInput = useCallback(() => {
@@ -178,8 +190,13 @@ export function Autosuggest(props: AutosuggestProps) {
       data-test-id="editor-tag-input"
       onFocus={() => {
         const text = getInputValue();
-        console.log(defaultItems);
         if (!text) onOpenMenu(defaultItems.slice());
+        else onOpenMenu([]);
+      }}
+      onClick={() => {
+        const text = getInputValue();
+        if (!text) onOpenMenu(defaultItems.slice());
+        else onOpenMenu([]);
       }}
       onChange={(e) => {
         const { value } = e.target;
@@ -191,22 +208,17 @@ export function Autosuggest(props: AutosuggestProps) {
       }}
       onKeyDown={(e) => {
         const text = getInputValue();
-        if (
-          e.key === "Enter" &&
-          !!text &&
-          isOpen &&
-          filteredItems.current.length <= 0
-        ) {
+        if (e.key === "Enter" && !!text && isOpen && !arrowDown.current) {
           onAction("add", text);
-        } else if (e.key === "Enter" && !!text && isOpen) {
-          onAction("select", filteredItems.current[0]);
         } else if (!text && e.key === "Backspace") {
           onRemove();
           closeMenu();
         } else if (e.key === "Escape") {
+          arrowDown.current = false;
           closeMenu();
           e.stopPropagation();
         } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+          arrowDown.current = true;
           if (e.key === "ArrowDown" && !text) onOpenMenu(defaultItems.slice());
 
           e.preventDefault();

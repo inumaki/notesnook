@@ -226,7 +226,8 @@ const useTiptap = (
           inclusive: true
         }).configure({
           openOnClick: !isMobile,
-          autolink: false
+          autolink: false,
+          linkOnPaste: true
         }),
         Table.configure({
           resizable: true,
@@ -307,6 +308,8 @@ const useTiptap = (
       ],
       onBeforeCreate: ({ editor }) => {
         editor.storage.portalProviderAPI = PortalProviderAPI;
+        editor.storage.dateFormat = dateFormat;
+        editor.storage.timeFormat = timeFormat;
         if (onBeforeCreate) onBeforeCreate({ editor });
       },
       injectCSS: false,

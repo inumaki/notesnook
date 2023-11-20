@@ -136,9 +136,10 @@ export const BehaviourSettings: SettingsGroup[] = [
     ]
   },
   {
-    key: "updates",
+    key: "desktop-app",
     section: "behaviour",
-    header: "Updates",
+    header: "Desktop app",
+    isHidden: () => !IS_DESKTOP_APP,
     settings: [
       {
         key: "auto-updates",
@@ -147,6 +148,7 @@ export const BehaviourSettings: SettingsGroup[] = [
           "Automatically download & install updates in the background without prompting first.",
         onStateChange: (listener) =>
           useSettingStore.subscribe((s) => s.autoUpdates, listener),
+        isHidden: () => useSettingStore.getState().isFlatpak,
         components: [
           {
             type: "toggle",
